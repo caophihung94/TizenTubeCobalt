@@ -13,14 +13,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: src
-          fetch-depth: 0  # <--- Fix dứt điểm lỗi "git log" báo 0.0.0
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.6
+          fetch-depth: 0
 
       - name: Sync & Build
-        env:
-          SCCACHE_GHA_ENABLED: "true"
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
           export PATH=$PATH:$PWD/depot_tools
@@ -40,20 +35,21 @@ jobs:
           
           gclient sync --no-history
           
-          # Tạo Debug Keystore ảo (Máy chủ Github không có sẵn)
+          # Tạo Debug Keystore ảo
           mkdir -p ~/.android
           keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
 
-          # Fix tính toán sai đường dẫn tương đối của script GN trên GitHub Runner
+          # Fix tính toán sai đường dẫn tương đối của script GN
           mkdir -p ../.android ../../.android ../../../.android
           cp ~/.android/debug.keystore ../.android/ 2>/dev/null || true
           cp ~/.android/debug.keystore ../../.android/ 2>/dev/null || true
           cp ~/.android/debug.keystore ../../../.android/ 2>/dev/null || true
           
           cd src
-          python3 cobalt/build/gn.py -p android-arm -c qa --no-rbe --use-sccache
+          # Bỏ cờ --use-sccache để fix triệt để lỗi server cache
+          python3 cobalt/build/gn.py -p android-arm -c qa --no-rbe
           
-          # <--- Thêm -j 2 để giới hạn CPU, chống sập RAM (OOM) của máy chủ 7GB.
+          # Dùng -j 2 chống sập RAM máy chủ GitHub Actions
           ninja -C out/android-arm_qa -j 2 cobalt_apk
 
       - name: Trả file
