@@ -1,4 +1,4 @@
-name: Build Cobalt APK (Fixed Path)
+name: Build Cobalt APK (Bulletproof)
 on: [workflow_dispatch]
 jobs:
   build:
@@ -9,11 +9,11 @@ jobs:
         with:
           tool-cache: true
           
-      # 1. Ép mã nguồn tải vào thư mục 'src' 
-      - name: Clone Code
+      - name: Clone Code (Full History)
         uses: actions/checkout@v4
         with:
           path: src
+          fetch-depth: 0  # <--- Fix dứt điểm lỗi "git log" báo 0.0.0
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -25,7 +25,6 @@ jobs:
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
           export PATH=$PATH:$PWD/depot_tools
           
-          # 2. Tạo file cấu hình giả lập chuẩn Chromium
           cat << 'EOF' > .gclient
           solutions = [
             {
@@ -41,10 +40,11 @@ jobs:
           
           gclient sync --no-history
           
-          # 3. Chuyển vào 'src' để build
           cd src
-          python3 cobalt/build/gn.py -p android-arm -c qa --use-sccache
-          ninja -C out/android-arm_qa cobalt_apk
+          python3 cobalt/build/gn.py -p android-arm -c qa --no-rbe --use-sccache
+          
+          # <--- Thêm -j 2 để giới hạn CPU, chống sập RAM (OOM) của máy chủ 7GB.
+          ninja -C out/android-arm_qa -j 2 cobalt_apk
 
       - name: Trả file
         uses: actions/upload-artifact@v4
