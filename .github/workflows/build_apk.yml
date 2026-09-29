@@ -1,4 +1,4 @@
-name: Build Cobalt APK (Optimal)
+name: Build Cobalt APK (Fixed Path)
 on: [workflow_dispatch]
 jobs:
   build:
@@ -9,8 +9,11 @@ jobs:
         with:
           tool-cache: true
           
+      # 1. Ép mã nguồn tải vào thư mục 'src' 
       - name: Clone Code
         uses: actions/checkout@v4
+        with:
+          path: src
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -21,10 +24,25 @@ jobs:
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
           export PATH=$PATH:$PWD/depot_tools
-          sed -i 's|src/.vpython3|.vpython3|g' DEPS || true
+          
+          # 2. Tạo file cấu hình giả lập chuẩn Chromium
+          cat << 'EOF' > .gclient
+          solutions = [
+            {
+              "name": "src",
+              "url": "https://github.com/${{ github.repository }}.git",
+              "deps_file": "DEPS",
+              "managed": False,
+              "custom_deps": {},
+            },
+          ]
+          target_os = ['android']
+          EOF
           
           gclient sync --no-history
           
+          # 3. Chuyển vào 'src' để build
+          cd src
           python3 cobalt/build/gn.py -p android-arm -c qa --use-sccache
           ninja -C out/android-arm_qa cobalt_apk
 
@@ -32,4 +50,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cobalt-apk
-          path: out/android-arm_qa/**/*.apk
+          path: src/out/android-arm_qa/**/*.apk
