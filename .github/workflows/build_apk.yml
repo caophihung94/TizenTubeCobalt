@@ -1,0 +1,30 @@
+name: Build Cobalt APK
+on: [workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Trống ổ cứng (GitHub Runner hay hết dung lượng)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          
+      - name: Clone Code
+        uses: actions/checkout@v4
+
+      - name: Setup & Build
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          export PATH=$PATH:$PWD/depot_tools
+          # Sửa lỗi path vpython3
+          sed -i 's|src/.vpython3|.vpython3|g' DEPS || true
+          
+          gclient sync --no-history
+          python3 cobalt/build/gn.py -p android-arm -c qa
+          ninja -C out/android-arm_qa cobalt_apk
+
+      - name: Trả file
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobalt-apk
+          path: out/android-arm_qa/**/*.apk
