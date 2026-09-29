@@ -99,6 +99,17 @@
               <data android:pathPattern=".*"/>
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="dev.cobalt.coat.VoiceSearchActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:launchMode="singleInstance">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         {% endblock %}
         <!-- The following service entries exist in order to allow us to
              start more than one sandboxed process. -->
