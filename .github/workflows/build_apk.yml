@@ -15,6 +15,12 @@ jobs:
           path: src
           fetch-depth: 0
 
+      # ---> BƯỚC MỚI ĐƯỢC THÊM VÀO ĐỂ FIX LỖI GPERF <---
+      - name: Cài đặt System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gperf
+
       - name: Sync & Build
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
@@ -46,7 +52,6 @@ jobs:
           cp ~/.android/debug.keystore ../../../.android/ 2>/dev/null || true
           
           cd src
-          # Bỏ cờ --use-sccache để fix triệt để lỗi server cache
           python3 cobalt/build/gn.py -p android-arm -c qa --no-rbe
           
           # Dùng -j 2 chống sập RAM máy chủ GitHub Actions
