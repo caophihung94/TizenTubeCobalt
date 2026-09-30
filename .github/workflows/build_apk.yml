@@ -9,11 +9,6 @@ jobs:
         with:
           tool-cache: true
           
-      - name: Set up Swap Space
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 10
-          
       - name: Clone Code (Full History)
         uses: actions/checkout@v4
         with:
