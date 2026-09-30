@@ -9,23 +9,43 @@ jobs:
         with:
           tool-cache: true
           
+      # BẮT BUỘC: Giữ Swap 10GB để không bị sập ngầm khi build
+      - name: Set up Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 10
+          
       - name: Clone Code (Full History)
         uses: actions/checkout@v4
         with:
           path: src
           fetch-depth: 0
 
-      # ---> CẬP NHẬT: Thêm kiến trúc 32-bit và thư viện libgcc cho V8 <---
+      # Cài đặt thêm ccache để làm bộ nhớ đệm
       - name: Cài đặt System Dependencies
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y gperf bison flex python3-setuptools gcc-multilib g++-multilib libc6:i386 libstdc++6:i386 libgcc-s1:i386
+          sudo apt-get install -y gperf bison flex python3-setuptools gcc-multilib g++-multilib libc6:i386 libstdc++6:i386 libgcc-s1:i386 ccache
+
+      # Cơ chế khôi phục tiến trình (Nếu job bị ngắt 6h, lần sau chạy sẽ nối tiếp)
+      - name: Phục hồi Compiler Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-cobalt-${{ github.run_id }}
+          restore-keys: |
+            ccache-cobalt-
 
       - name: Sync & Build
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
           export PATH=$PATH:$PWD/depot_tools
+          
+          # Cấu hình Ccache
+          export CCACHE_DIR=~/.cache/ccache
+          export CCACHE_MAXSIZE=10G
+          ccache -M 10G
           
           cat << 'EOF' > .gclient
           solutions = [
@@ -55,6 +75,11 @@ jobs:
           cd src
           python3 cobalt/build/gn.py -p android-arm -c qa --no-rbe
           
+          # Ép hệ thống dùng Ccache để lưu tiến độ
+          echo 'cc_wrapper="ccache"' >> out/android-arm_qa/args.gn
+          gn gen out/android-arm_qa
+          
+          # Dùng -j 2 + Swap để chống sập RAM
           ninja -C out/android-arm_qa -j 2 cobalt_apk
 
       - name: Trả file
