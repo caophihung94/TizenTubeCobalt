@@ -9,7 +9,6 @@ jobs:
         with:
           tool-cache: true
           
-      # ---> BƯỚC MỚI: Thêm 10GB RAM ảo chống sập khi biên dịch Blink <---
       - name: Set up Swap Space
         uses: pierotofy/set-swap-space@master
         with:
@@ -21,11 +20,12 @@ jobs:
           path: src
           fetch-depth: 0
 
-      # ---> CẬP NHẬT: Cài trọn bộ công cụ Generate Code <---
+      # ---> CẬP NHẬT: Thêm kiến trúc 32-bit và thư viện libgcc cho V8 <---
       - name: Cài đặt System Dependencies
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y gperf bison flex python3-setuptools
+          sudo apt-get install -y gperf bison flex python3-setuptools gcc-multilib g++-multilib libc6:i386 libstdc++6:i386 libgcc-s1:i386
 
       - name: Sync & Build
         run: |
@@ -60,7 +60,6 @@ jobs:
           cd src
           python3 cobalt/build/gn.py -p android-arm -c qa --no-rbe
           
-          # Dùng -j 2 chống sập kết hợp với Swap space
           ninja -C out/android-arm_qa -j 2 cobalt_apk
 
       - name: Trả file
