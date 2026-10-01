@@ -53,6 +53,12 @@ jobs:
           export CCACHE_MAXSIZE=10G
           ccache -M 10G
           
+          # ---> BƯỚC MỚI: Tinh chỉnh mạng lưới Git chống nghẽn <---
+          git config --global core.askPass /bin/echo
+          git config --global http.postBuffer 524288000
+          git config --global http.lowSpeedLimit 1000
+          git config --global http.lowSpeedTime 300
+          
           cat << 'EOF' > .gclient
           solutions = [
             {
@@ -66,7 +72,8 @@ jobs:
           target_os = ['android']
           EOF
           
-          gclient sync --no-history
+          # ---> CẬP NHẬT: Thêm -v -v (in chi tiết) và -j 4 (giới hạn 4 luồng mạng) <---
+          gclient sync -v -v -j 4 --no-history
           
           mkdir -p ~/.android
           keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
