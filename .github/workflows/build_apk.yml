@@ -36,6 +36,7 @@ jobs:
           key: ccache-cobalt-${{ github.run_id }}
           restore-keys: |
             ccache-cobalt-
+          save-always: true  # <--- BẮT BUỘC THÊM DÒNG NÀY
 
       - name: Sync & Build
         run: |
