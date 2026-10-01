@@ -10,10 +10,10 @@ jobs:
           tool-cache: true
           
       # BẮT BUỘC: Giữ Swap 10GB để không bị sập ngầm khi build
-      - name: Set up Swap Space
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 10
+      # - name: Set up Swap Space
+      #   uses: pierotofy/set-swap-space@master
+      #   with:
+      #     swap-size-gb: 10
           
       - name: Clone Code (Full History)
         uses: actions/checkout@v4
