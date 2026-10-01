@@ -1,15 +1,23 @@
 name: Build Cobalt APK (Bulletproof)
 on: [workflow_dispatch]
+
+# Cấp quyền cho phép Workflow tự kích hoạt lại chính nó
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-22.04
+    # Chủ động ngắt ở 5h40 phút để chừa thời gian lưu Cache và gọi lệnh Restart
+    timeout-minutes: 340 
+    
     steps:
       - name: Trống ổ cứng
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: true
           
-      # BẮT BUỘC: Giữ Swap 10GB để không bị sập ngầm khi build
       # - name: Set up Swap Space
       #   uses: pierotofy/set-swap-space@master
       #   with:
@@ -21,14 +29,12 @@ jobs:
           path: src
           fetch-depth: 0
 
-      # Cài đặt thêm ccache để làm bộ nhớ đệm
       - name: Cài đặt System Dependencies
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get install -y gperf bison flex python3-setuptools gcc-multilib g++-multilib libc6:i386 libstdc++6:i386 libgcc-s1:i386 ccache
 
-      # Cơ chế khôi phục tiến trình (Nếu job bị ngắt 6h, lần sau chạy sẽ nối tiếp)
       - name: Phục hồi Compiler Cache
         uses: actions/cache@v4
         with:
@@ -36,14 +42,16 @@ jobs:
           key: ccache-cobalt-${{ github.run_id }}
           restore-keys: |
             ccache-cobalt-
-          save-always: true  # <--- BẮT BUỘC THÊM DÒNG NÀY
+          save-always: true
 
       - name: Sync & Build
         run: |
+          # Đánh dấu thời gian bắt đầu build
+          echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
+          
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
           export PATH=$PATH:$PWD/depot_tools
           
-          # Cấu hình Ccache
           export CCACHE_DIR=~/.cache/ccache
           export CCACHE_MAXSIZE=10G
           ccache -M 10G
@@ -63,11 +71,9 @@ jobs:
           
           gclient sync --no-history
           
-          # Tạo Debug Keystore ảo
           mkdir -p ~/.android
           keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
 
-          # Fix tính toán sai đường dẫn tương đối của script GN
           mkdir -p ../.android ../../.android ../../../.android
           cp ~/.android/debug.keystore ../.android/ 2>/dev/null || true
           cp ~/.android/debug.keystore ../../.android/ 2>/dev/null || true
@@ -76,11 +82,9 @@ jobs:
           cd src
           python3 cobalt/build/gn.py -p android-arm -c qa --no-rbe
           
-          # Ép hệ thống dùng Ccache để lưu tiến độ
           echo 'cc_wrapper="ccache"' >> out/android-arm_qa/args.gn
           gn gen out/android-arm_qa
           
-          # Dùng -j 2 + Swap để chống sập RAM
           ninja -C out/android-arm_qa -j 2 cobalt_apk
 
       - name: Trả file
@@ -88,3 +92,23 @@ jobs:
         with:
           name: cobalt-apk
           path: src/out/android-arm_qa/**/*.apk
+
+      # BƯỚC MỚI: Tự động chạy lại nếu bị ngắt do Timeout
+      - name: Tự động Resume nếu Timeout
+        if: failure() # Chỉ chạy bước này nếu bước "Sync & Build" bị lỗi hoặc timeout
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Tính toán xem tiến trình đã chạy được bao nhiêu giây
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "Thời gian tiến trình đã chạy: $DURATION giây"
+          
+          # 18000 giây = 5 tiếng. 
+          # Nếu chạy hơn 5 tiếng mới lỗi, chứng tỏ là do timeout hệ thống.
+          if [ $DURATION -gt 18000 ]; then
+            echo "Phát hiện Timeout! Đang tự động gọi một lượt chạy mới để nối tiếp Ccache..."
+            gh workflow run "${{ github.workflow }}" --ref "${{ github.ref }}"
+          else
+            echo "Lỗi xuất hiện sớm (dưới 5 tiếng). Đây là lỗi mã nguồn thật sự, KHÔNG tự động chạy lại để tránh lặp vô hạn."
+          fi
