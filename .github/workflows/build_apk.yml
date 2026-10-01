@@ -1,7 +1,6 @@
 name: Build Cobalt APK (Bulletproof)
 on: [workflow_dispatch]
 
-# Cấp quyền cho phép Workflow tự kích hoạt lại chính nó
 permissions:
   actions: write
   contents: read
@@ -9,7 +8,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    # Chủ động ngắt ở 5h40 phút để chừa thời gian lưu Cache và gọi lệnh Restart
     timeout-minutes: 340 
     
     steps:
@@ -35,18 +33,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gperf bison flex python3-setuptools gcc-multilib g++-multilib libc6:i386 libstdc++6:i386 libgcc-s1:i386 ccache
 
+      # ---> CẬP NHẬT 1: Chỉ thực hiện Restore (Kéo cache về) <---
       - name: Phục hồi Compiler Cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ccache
           key: ccache-cobalt-${{ github.run_id }}
           restore-keys: |
             ccache-cobalt-
-          save-always: true
 
       - name: Sync & Build
         run: |
-          # Đánh dấu thời gian bắt đầu build
           echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
           
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
@@ -93,19 +90,23 @@ jobs:
           name: cobalt-apk
           path: src/out/android-arm_qa/**/*.apk
 
-      # BƯỚC MỚI: Tự động chạy lại nếu bị ngắt do Timeout
+      # ---> CẬP NHẬT 2: Tách riêng bước Save (Lưu cache lên) với if: always() <---
+      - name: Lưu Compiler Cache (Luôn chạy)
+        uses: actions/cache/save@v4
+        if: always() # Lệnh bài miễn tử: Dù build lỗi hay timeout vẫn buộc phải chạy bước này
+        with:
+          path: ~/.cache/ccache
+          key: ccache-cobalt-${{ github.run_id }}
+
       - name: Tự động Resume nếu Timeout
-        if: failure() # Chỉ chạy bước này nếu bước "Sync & Build" bị lỗi hoặc timeout
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Tính toán xem tiến trình đã chạy được bao nhiêu giây
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           echo "Thời gian tiến trình đã chạy: $DURATION giây"
           
-          # 18000 giây = 5 tiếng. 
-          # Nếu chạy hơn 5 tiếng mới lỗi, chứng tỏ là do timeout hệ thống.
           if [ $DURATION -gt 18000 ]; then
             echo "Phát hiện Timeout! Đang tự động gọi một lượt chạy mới để nối tiếp Ccache..."
             gh workflow run "${{ github.workflow }}" --ref "${{ github.ref }}"
