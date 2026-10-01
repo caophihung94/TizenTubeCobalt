@@ -119,10 +119,12 @@ jobs:
           DURATION=$((END_TIME - START_TIME))
           echo "Thời gian tiến trình đã chạy: $DURATION giây"
           
-          # 14400 giây = 4 tiếng.
           if [ $DURATION -gt 14400 ]; then
             echo "Phát hiện Timeout hệ thống an toàn! Đang tự động kích hoạt lượt chạy nối tiếp..."
-            gh workflow run "${{ github.workflow }}" --ref "${{ github.ref }}"
+            
+            # ---> CẬP NHẬT: Thêm tham số --repo "${{ github.repository }}" <---
+            gh workflow run "${{ github.workflow }}" --ref "${{ github.ref }}" --repo "${{ github.repository }}"
+            
           else
             echo "Lỗi xuất hiện sớm (dưới 4 tiếng). Đây là lỗi mã nguồn thật sự, KHÔNG tự động chạy lại."
           fi
