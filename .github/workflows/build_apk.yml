@@ -16,10 +16,10 @@ jobs:
         with:
           tool-cache: true
           
-      # - name: Set up Swap Space
-      #   uses: pierotofy/set-swap-space@master
-      #   with:
-      #     swap-size-gb: 10
+      - name: Set up Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 10
           
       - name: Clone Code (Full History)
         uses: actions/checkout@v4
@@ -33,7 +33,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gperf bison flex python3-setuptools gcc-multilib g++-multilib libc6:i386 libstdc++6:i386 libgcc-s1:i386 ccache
 
-      # ---> CẬP NHẬT 1: Chỉ thực hiện Restore (Kéo cache về) <---
       - name: Phục hồi Compiler Cache
         uses: actions/cache/restore@v4
         with:
@@ -53,7 +52,6 @@ jobs:
           export CCACHE_MAXSIZE=10G
           ccache -M 10G
           
-          # ---> BƯỚC MỚI: Tinh chỉnh mạng lưới Git chống nghẽn <---
           git config --global core.askPass /bin/echo
           git config --global http.postBuffer 524288000
           git config --global http.lowSpeedLimit 1000
@@ -72,7 +70,6 @@ jobs:
           target_os = ['android']
           EOF
           
-          # ---> CẬP NHẬT: Thêm -v -v (in chi tiết) và -j 4 (giới hạn 4 luồng mạng) <---
           gclient sync -v -v -j 4 --no-history
           
           mkdir -p ~/.android
@@ -89,7 +86,8 @@ jobs:
           echo 'cc_wrapper="ccache"' >> out/android-arm_qa/args.gn
           gn gen out/android-arm_qa
           
-          ninja -C out/android-arm_qa -j 2 cobalt_apk
+          # ---> CẬP NHẬT: Chủ động dừng biên dịch sau 4.5 tiếng để bảo toàn mảng lưu Cache <---
+          timeout 4.5h ninja -C out/android-arm_qa -j 2 cobalt_apk
 
       - name: Trả file
         uses: actions/upload-artifact@v4
@@ -97,10 +95,17 @@ jobs:
           name: cobalt-apk
           path: src/out/android-arm_qa/**/*.apk
 
-      # ---> CẬP NHẬT 2: Tách riêng bước Save (Lưu cache lên) với if: always() <---
+      # ---> BƯỚC MỚI: Bóp chết hoàn toàn mọi tiến trình ngầm <---
+      - name: Dọn dẹp tiến trình ngầm (Chống lỗi đóng gói Cache)
+        if: always()
+        run: |
+          echo "Đang dọn dẹp các luồng biên dịch còn sót lại..."
+          killall -9 ninja clang clang++ python3 2>/dev/null || true
+          sleep 5 # Cho ổ cứng 5 giây nghỉ ngơi để chốt dữ liệu
+
       - name: Lưu Compiler Cache (Luôn chạy)
         uses: actions/cache/save@v4
-        if: always() # Lệnh bài miễn tử: Dù build lỗi hay timeout vẫn buộc phải chạy bước này
+        if: always()
         with:
           path: ~/.cache/ccache
           key: ccache-cobalt-${{ github.run_id }}
@@ -114,9 +119,10 @@ jobs:
           DURATION=$((END_TIME - START_TIME))
           echo "Thời gian tiến trình đã chạy: $DURATION giây"
           
-          if [ $DURATION -gt 18000 ]; then
-            echo "Phát hiện Timeout! Đang tự động gọi một lượt chạy mới để nối tiếp Ccache..."
+          # 14400 giây = 4 tiếng.
+          if [ $DURATION -gt 14400 ]; then
+            echo "Phát hiện Timeout hệ thống an toàn! Đang tự động kích hoạt lượt chạy nối tiếp..."
             gh workflow run "${{ github.workflow }}" --ref "${{ github.ref }}"
           else
-            echo "Lỗi xuất hiện sớm (dưới 5 tiếng). Đây là lỗi mã nguồn thật sự, KHÔNG tự động chạy lại để tránh lặp vô hạn."
+            echo "Lỗi xuất hiện sớm (dưới 4 tiếng). Đây là lỗi mã nguồn thật sự, KHÔNG tự động chạy lại."
           fi
