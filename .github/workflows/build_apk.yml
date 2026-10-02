@@ -87,7 +87,7 @@ jobs:
           gn gen out/android-arm_qa
           
           # ---> CẬP NHẬT: Chủ động dừng biên dịch sau 4.5 tiếng để bảo toàn mảng lưu Cache <---
-          timeout 4.5h ninja -C out/android-arm_qa -j 2 cobalt_apk
+          timeout 4.5h ninja -C out/android-arm_qa -j 1 cobalt_apk
 
       - name: Trả file
         uses: actions/upload-artifact@v4
